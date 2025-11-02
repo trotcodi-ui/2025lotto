@@ -1,9 +1,9 @@
 name: Update Lotto Numbers Weekly
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "0 13 * * 6"  # 매주 토요일 22시 (한국시간, UTC+9 → 13시)
-  workflow_dispatch:      # 수동 실행도 가능하게
+    - cron: '0 13 * * 6' # 매주 토요일 밤 10시 (한국 시간 기준)
 
 jobs:
   update:
@@ -16,51 +16,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: '3.x'
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install requests
 
-      - name: Update Lotto Data
+      - name: Run Lotto Update Script
+        run: python update_lotto.py
+
+      - name: Commit and Push if changed
         run: |
-          import json, requests, os
-
-          file_path = "2025lotto_numbers_1_to_1182_final.json"
-
-          # 기존 데이터 불러오기
-          with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-          # 현재 저장된 마지막 회차 확인
-          last_draw = max([item["draw_no"] for item in data])
-
-          # 새로운 회차 가져오기
-          next_draw = last_draw + 1
-          url = f"https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={next_draw}"
-          res = requests.get(url)
-          info = res.json()
-
-          # 데이터 유효성 확인
-          if info.get("returnValue") == "success":
-              numbers = [info[f"drwtNo{i}"] for i in range(1, 7)]
-              data.append({
-                  "draw_no": info["drwNo"],
-                  "numbers": numbers,
-                  "bonus": info["bnusNo"]
-              })
-
-              # JSON 파일 덮어쓰기
-              with open(file_path, "w", encoding="utf-8") as f:
-                  json.dump(data, f, ensure_ascii=False, indent=2)
-              print(f"✅ {next_draw}회차 로또 번호 추가 완료:", numbers)
-          else:
-              print(f"⚠️ {next_draw}회차 데이터가 아직 공개되지 않았습니다.")
-
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "github-actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add 2025lotto_numbers_1_to_1182_final.json
-          git commit -m "자동 업데이트: 최신 로또 번호 추가" || echo "No changes to commit"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 2025lotto_numbers_1_to_1182_final.json || true
+          git commit -m "🔄 Auto-update lotto numbers" || echo "No changes to commit"
           git push

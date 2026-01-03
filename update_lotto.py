@@ -19,7 +19,7 @@ HEADERS = {
 }
 
 # =========================
-# 기존 데이터 로드
+# 데이터 로드
 # =========================
 if os.path.exists(FILE_PATH):
     with open(FILE_PATH, "r", encoding="utf-8") as f:
@@ -27,19 +27,22 @@ if os.path.exists(FILE_PATH):
 else:
     data = []
 
-# 최신 회차 (내림차순 구조)
-last_draw = data[0]["draw_no"] if data else 0
+# 이미 저장된 회차 집합 (중복 방지)
+existing_draws = {d["draw_no"] for d in data}
+
+# 최신 회차 계산 (안전)
+last_draw = max(existing_draws) if existing_draws else 0
 next_draw = last_draw + 1
 
-print(f"🔍 마지막 저장 회차: {last_draw}")
-print(f"➡️  시도 회차: {next_draw}")
+print(f"🔍 현재 최신 회차: {last_draw}")
+print(f"➡️ 다음 시도 회차: {next_draw}")
 
 # =========================
-# API 호출 (재시도 포함)
+# 자동 복구 / 업데이트 루프
 # =========================
-info = None
+added = 0
 
-for attempt in range(3):
+while True:
     try:
         res = requests.get(
             BASE_URL.format(next_draw),
@@ -47,40 +50,45 @@ for attempt in range(3):
             timeout=10
         )
         info = res.json()
-
-        if info.get("returnValue") == "success":
-            break
-        else:
-            print(f"⏳ {next_draw}회차 아직 미발표 (시도 {attempt + 1}/3)")
     except Exception as e:
-        print(f"⚠️ 요청 실패 (시도 {attempt + 1}/3): {e}")
+        print(f"⚠️ 요청 오류: {e}")
+        break
 
-    time.sleep(2)
+    # API 미오픈 → 중단
+    if info.get("returnValue") != "success":
+        print(f"⏹ {next_draw}회차 API 미오픈. 종료")
+        break
+
+    # 혹시 모를 중복 방지
+    if next_draw in existing_draws:
+        print(f"⚠️ {next_draw}회차 이미 존재 → 스킵")
+        next_draw += 1
+        continue
+
+    numbers = [info[f"drwtNo{i}"] for i in range(1, 7)]
+    bonus = info["bnusNo"]
+
+    data.insert(0, {
+        "draw_no": next_draw,
+        "numbers": numbers,
+        "bonus": bonus
+    })
+
+    existing_draws.add(next_draw)
+    added += 1
+
+    print(f"✅ {next_draw}회차 추가 완료 → {numbers} + 보너스 {bonus}")
+
+    next_draw += 1
+    time.sleep(1)
 
 # =========================
-# 결과 처리
+# 저장
 # =========================
-if not info or info.get("returnValue") != "success":
-    print(f"🚫 {next_draw}회차 데이터 없음. 종료.")
-    exit(0)
+if added > 0:
+    with open(FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-numbers = [info[f"drwtNo{i}"] for i in range(1, 7)]
-bonus = info["bnusNo"]
-
-new_entry = {
-    "draw_no": next_draw,
-    "numbers": numbers,
-    "bonus": bonus
-}
-
-# 내림차순 유지 → 맨 앞에 삽입
-data.insert(0, new_entry)
-
-# =========================
-# 파일 저장
-# =========================
-with open(FILE_PATH, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-
-print(f"✅ {next_draw}회차 업데이트 완료")
-print(f"🎯 번호: {numbers} + 보너스 {bonus}")
+    print(f"🎉 총 {added}개 회차 업데이트 완료")
+else:
+    print("ℹ️ 추가된 회차 없음 (이미 최신)")

@@ -21,11 +21,10 @@ url = f"https://search.naver.com/search.naver?query={next_draw}회로또"
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
 try:
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers, timeout=15)
     html = res.text
 
-    # HTML에서 숫자 6개와 보너스 번호 추출 (정규식 사용)
-    # 네이버의 로또 당첨번호 구조를 찾는 패턴입니다.
+    # 네이버 검색 결과에서 당첨번호 패턴 추출
     numbers = re.findall(r'<span class="ball_n.*?">(\d+)</span>', html)
     
     if len(numbers) >= 7:
@@ -42,7 +41,9 @@ try:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"✅ 네이버를 통해 {next_draw}회차 업데이트 완료: {win_numbers} + {bonus}")
     else:
-        print("🚫 데이터를 찾을 수 없습니다. 아직 업데이트 전이거나 차단되었습니다.")
+        print("🚫 데이터를 찾을 수 없습니다. 아직 업데이트 전이거나 네이버도 접속을 제한했습니다.")
+        exit(1) # 에러로 표시하여 인지할 수 있게 함
 
 except Exception as e:
     print(f"❌ 오류 발생: {e}")
+    exit(1)

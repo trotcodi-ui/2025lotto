@@ -1,10 +1,11 @@
 import json
 import os
 import requests
+import re
 
 file_path = "2025lotto_numbers_1_to_1182_final.json"
 
-# 1. 파일 읽기
+# 기존 데이터 불러오기
 if os.path.exists(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -13,27 +14,35 @@ else:
 
 last_draw = data[0]["draw_no"] if data else 0
 next_draw = last_draw + 1
+print(f"🔍 현재 마지막 회차: {last_draw}, 다음 시도 회차: {next_draw}")
 
-print(f"🔍 현재 마지막 회차: {last_draw}, 시도 회차: {next_draw}")
+# 네이버 로또 검색 결과 주소 (우회용)
+url = f"https://search.naver.com/search.naver?query={next_draw}회로또"
+headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-# 2. API 호출 (사람인 것처럼 헤더 추가)
-headers = {'User-Agent': 'Mozilla/5.0'}
-url = f"https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={next_draw}"
+try:
+    res = requests.get(url, headers=headers)
+    html = res.text
 
-res = requests.get(url, headers=headers)
-info = res.json()
-
-# 3. 데이터 확인 및 저장
-if info.get("returnValue") == "success":
-    numbers = [info[f"drwtNo{i}"] for i in range(1, 7)]
-    bonus = info["bnusNo"]
-    new_entry = {"draw_no": next_draw, "numbers": numbers, "bonus": bonus}
+    # HTML에서 숫자 6개와 보너스 번호 추출 (정규식 사용)
+    # 네이버의 로또 당첨번호 구조를 찾는 패턴입니다.
+    numbers = re.findall(r'<span class="ball_n.*?">(\d+)</span>', html)
     
-    data.insert(0, new_entry)
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"✅ {next_draw}회차 저장 완료: {numbers}")
-else:
-    print(f"🚫 API에서 데이터를 가져오지 못했습니다. 응답값: {info}")
-    # 데이터가 없으면 액션을 실패로 표시하여 사용자에게 알림
-    exit(1)
+    if len(numbers) >= 7:
+        win_numbers = [int(n) for n in numbers[:6]]
+        bonus = int(numbers[6])
+        
+        new_entry = {
+            "draw_no": next_draw,
+            "numbers": win_numbers,
+            "bonus": bonus
+        }
+        data.insert(0, new_entry)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"✅ 네이버를 통해 {next_draw}회차 업데이트 완료: {win_numbers} + {bonus}")
+    else:
+        print("🚫 데이터를 찾을 수 없습니다. 아직 업데이트 전이거나 차단되었습니다.")
+
+except Exception as e:
+    print(f"❌ 오류 발생: {e}")

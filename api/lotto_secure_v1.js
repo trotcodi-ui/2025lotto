@@ -1,7 +1,5 @@
-/**
- * 🤖 LOTTO GO SECURE ENGINE - v1.0
+/* 🤖 LOTTO GO SECURE ENGINE - v1.1
  * Copyright © 2026 trotcodi-ui. All rights reserved.
- * Unauthorized use is strictly prohibited.
  */
 
 (async function() {
@@ -33,7 +31,7 @@
         
         displayLatestLotto(window.lottoData[0]);
         
-        // 티스토리 onclick 무력화 대비: 이벤트 리스너 직접 연결
+        // 버튼 연결 실행
         initEventListeners();
 
     } catch (e) {
@@ -48,29 +46,35 @@ let currentRangeLabel = "";
 let top6Global = [];
 let bottom6Global = [];
 
-// 버튼들과 함수를 강제로 연결 (티스토리 에디터 보호책)
-function initEventListeners() {
-    const analyzeBtn = document.querySelector('button[onclick="analyzeRange()"]') || document.querySelector('.lotto-btn.green');
-    const reExtractBtn = document.querySelector('button[onclick="generateRecommendations()"]');
-    const shareBtn = document.getElementById("share-analysis-btn");
-    const historyBtn = document.querySelector('button[onclick="checkHistory()"]');
-
-    if(analyzeBtn) analyzeBtn.addEventListener("click", (e) => { e.preventDefault(); analyzeRange(); });
-    if(reExtractBtn) reExtractBtn.addEventListener("click", (e) => { e.preventDefault(); generateRecommendations(); });
-    if(shareBtn) shareBtn.addEventListener("click", (e) => { e.preventDefault(); shareAnalysis(); });
-    if(historyBtn) historyBtn.addEventListener("click", (e) => { e.preventDefault(); checkHistory(); });
-}
-
 function getBallColor(n) {
     if (n <= 10) return "#fbc400"; if (n <= 20) return "#69c8f2";
     if (n <= 30) return "#ff7272"; if (n <= 40) return "#aaa"; return "#b0d840";
+}
+
+// 티스토리 HTML 버튼들과 JS 함수를 강제로 연결
+function initEventListeners() {
+    // 1. 통계 분석 실행 버튼 (클래스 기반)
+    const analyzeBtn = document.querySelector('.lotto-btn.green');
+    if(analyzeBtn) analyzeBtn.addEventListener("click", analyzeRange);
+
+    // 2. 옵션 적용 재추출 버튼 (두 번째 lotto-btn)
+    const optionBtn = document.querySelector('#re-extract-options .lotto-btn');
+    if(optionBtn) optionBtn.addEventListener("click", generateRecommendations);
+
+    // 3. 당첨 이력 확인 버튼 (historySection 내의 버튼)
+    const historyBtn = document.querySelector('#historySection .lotto-btn');
+    if(historyBtn) historyBtn.addEventListener("click", () => checkHistory());
+
+    // 4. 분석 결과 복사 버튼
+    const shareBtn = document.getElementById("share-analysis-btn");
+    if(shareBtn) shareBtn.addEventListener("click", shareAnalysis);
 }
 
 function displayLatestLotto(latest) {
     const titleEl = document.getElementById("latest-draw-title");
     const dateEl = document.getElementById("latest-draw-date");
     const wrapEl = document.getElementById("latest-numbers-wrap");
-    const statusEl = document.getElementById("auto-status-text");
+    const statusEl = document.getElementById("auto-status-text") || document.querySelector('#lotto-secure-app-wrapper span[style*="color: #d35400"]');
 
     if(titleEl) titleEl.innerHTML = `⭐ 제 ${latest.draw_no}회 당첨번호 ⭐`;
     if(dateEl) dateEl.innerHTML = latest.draw_date ? `(추첨일: ${latest.draw_date})` : "";
@@ -82,7 +86,7 @@ function displayLatestLotto(latest) {
 }
 
 function analyzeRange() {
-    if(!window.lottoData || window.lottoData.length === 0) return;
+    if(!window.lottoData) return;
     const val = document.getElementById("rangeSelect").value;
     currentRangeLabel = document.getElementById("rangeSelect").options[document.getElementById("rangeSelect").selectedIndex].text;
     let recent = val === "all" ? [...window.lottoData] : window.lottoData.slice(0, parseInt(val));
@@ -137,7 +141,7 @@ function shareAnalysis() {
 }
 
 function checkHistory(customNums = null) {
-    if(!window.lottoData || window.lottoData.length === 0) return;
+    if(!window.lottoData) return;
     let nums = customNums || document.getElementById("userNumbers").value.split(",").map(n=>parseInt(n.trim())).filter(n=>!isNaN(n));
     if(nums.length !== 6) return alert("6개 번호를 확인하세요.");
     let html = `<div style="padding:10px; background:#eee; border-radius:6px; margin-bottom:10px; font-size:14px;"><strong>🔍 조회 번호: ${nums.join(", ")}</strong></div>`;
@@ -155,8 +159,5 @@ function checkHistory(customNums = null) {
         }
     });
     document.getElementById("historyResult").innerHTML = count > 0 ? html : "<p style='padding:20px; text-align:center; color:#999;'>4개 이상 적중 이력이 없습니다.</p>";
-    if(customNums) {
-        const target = document.getElementById("historySection");
-        if(target) target.scrollIntoView({behavior:'smooth'});
-    }
+    if(customNums) document.getElementById("historySection").scrollIntoView({behavior:'smooth'});
 }

@@ -2,11 +2,11 @@ name: Update Lotto Numbers Weekly
 
 on:
   schedule:
-    # 매주 토요일 23:00 KST (UTC 14:00)
-    - cron: '0 14 * * 6'
+    # 매주 토요일 밤 11:00, 11:30, 12:00, 12:30, 01:00 (KST 기준)
+    # UTC 14:00, 14:30, 15:00, 15:30, 16:00 에 해당합니다.
+    - cron: '0,30 14,15,16 * * 6'
   workflow_dispatch:
 
-# ⭐⭐⭐ 이게 핵심입니다 ⭐⭐⭐
 permissions:
   contents: write
 
@@ -30,6 +30,7 @@ jobs:
 
       - name: Run Lotto Update Script
         run: |
+          # 파이썬 코드 실행 (데이터를 가져오고 JSON을 수정함)
           python update_lotto.py
 
       - name: Commit and Push if changed
@@ -37,11 +38,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add 2025lotto_numbers_1_to_1182_final.json
+          # 모든 변경사항을 감지하도록 수정 (더 안전함)
+          git add .
 
           if git diff --cached --quiet; then
-            echo "변경사항 없음"
+            echo "변경사항 없음: 최신 회차가 아직 없거나 이미 업데이트되었습니다."
           else
-            git commit -m "Auto update lotto numbers"
+            git commit -m "Auto update lotto numbers (Scheduled Check)"
             git push
           fi

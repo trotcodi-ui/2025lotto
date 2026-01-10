@@ -1,6 +1,7 @@
 /**
- * 🤖 LOTTO GO SECURE ENGINE - Copyright © 2026 trotcodi-ui
- * 모든 권리는 원작자에게 있으며, 무단 도용 시 법적 책임을 물을 수 있습니다.
+ * 🤖 LOTTO GO SECURE ENGINE - v1.0
+ * Copyright © 2026 trotcodi-ui. All rights reserved.
+ * Unauthorized use is strictly prohibited.
  */
 
 (async function() {
@@ -13,8 +14,11 @@
         const isAllowed = config.allowed.some(site => window.location.href.includes(site));
 
         if (!isAllowed) {
-            alert("🚫 " + (config.message || "허용된 사이트에서만 이용 가능합니다. 원본 페이지로 이동합니다."));
-            window.location.replace("https://pogkr.tistory.com"); 
+            document.body.innerHTML = `
+                <div style="max-width:600px; margin:80px auto; padding:40px 20px; text-align:center; border:2px solid #e74c3c; border-radius:14px; background:#fff; font-weight:bold; color:#c0392b; line-height:1.6;">
+                    🚫 ${config.message || "허용된 사이트에서만 이용 가능합니다. 원본 페이지로 이동합니다."}
+                </div>`;
+            setTimeout(() => { window.location.replace("https://pogkr.tistory.com"); }, 2000);
             return;
         }
 
@@ -22,18 +26,21 @@
         const wrapper = document.getElementById("lotto-secure-app-wrapper");
         if(wrapper) wrapper.style.display = "block";
 
-        // 데이터 초기화
+        // 데이터 로드
         const lottoRes = await fetch(JSON_URL);
         const d = await lottoRes.json();
         window.lottoData = d.sort((a,b) => b.draw_no - a.draw_no);
+        
         displayLatestLotto(window.lottoData[0]);
+        
+        // 티스토리 onclick 무력화 대비: 이벤트 리스너 직접 연결
+        initEventListeners();
 
     } catch (e) {
         console.error("보안 인증 또는 데이터 로드 중 오류 발생:", e);
     }
 })();
 
-/* --- 전역 변수 및 유틸리티 --- */
 const BLOG_URL = decodeURIComponent(window.location.href);
 let lastAnalysisText = ""; 
 let currentPool = [];
@@ -41,29 +48,41 @@ let currentRangeLabel = "";
 let top6Global = [];
 let bottom6Global = [];
 
+// 버튼들과 함수를 강제로 연결 (티스토리 에디터 보호책)
+function initEventListeners() {
+    const analyzeBtn = document.querySelector('button[onclick="analyzeRange()"]') || document.querySelector('.lotto-btn.green');
+    const reExtractBtn = document.querySelector('button[onclick="generateRecommendations()"]');
+    const shareBtn = document.getElementById("share-analysis-btn");
+    const historyBtn = document.querySelector('button[onclick="checkHistory()"]');
+
+    if(analyzeBtn) analyzeBtn.addEventListener("click", (e) => { e.preventDefault(); analyzeRange(); });
+    if(reExtractBtn) reExtractBtn.addEventListener("click", (e) => { e.preventDefault(); generateRecommendations(); });
+    if(shareBtn) shareBtn.addEventListener("click", (e) => { e.preventDefault(); shareAnalysis(); });
+    if(historyBtn) historyBtn.addEventListener("click", (e) => { e.preventDefault(); checkHistory(); });
+}
+
 function getBallColor(n) {
     if (n <= 10) return "#fbc400"; if (n <= 20) return "#69c8f2";
     if (n <= 30) return "#ff7272"; if (n <= 40) return "#aaa"; return "#b0d840";
 }
 
-/* --- 핵심 실행 함수들 (이 부분이 있어야 버튼이 작동함) --- */
+function displayLatestLotto(latest) {
+    const titleEl = document.getElementById("latest-draw-title");
+    const dateEl = document.getElementById("latest-draw-date");
+    const wrapEl = document.getElementById("latest-numbers-wrap");
+    const statusEl = document.getElementById("auto-status-text");
 
-window.displayLatestLotto = function(latest) {
-    const title = document.getElementById("latest-draw-title");
-    const wrap = document.getElementById("latest-numbers-wrap");
-    const status = document.getElementById("auto-status-text");
-    if(title) title.innerHTML = `⭐ 제 ${latest.draw_no}회 당첨번호 ⭐`;
+    if(titleEl) titleEl.innerHTML = `⭐ 제 ${latest.draw_no}회 당첨번호 ⭐`;
+    if(dateEl) dateEl.innerHTML = latest.draw_date ? `(추첨일: ${latest.draw_date})` : "";
+    
     let html = "";
     latest.numbers.forEach(n => html += `<span class="num" style="background:${getBallColor(n)};">${n}</span>`);
-    if(wrap) wrap.innerHTML = html;
-    if(status) status.innerText = `현재 제 ${latest.draw_no}회차 데이터 반영 완료`;
+    if(wrapEl) wrapEl.innerHTML = html;
+    if(statusEl) statusEl.innerText = `현재 제 ${latest.draw_no}회차 데이터 반영 완료`;
 }
 
-window.analyzeRange = function() {
-    if(!window.lottoData || window.lottoData.length === 0) {
-        alert("데이터가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.");
-        return;
-    }
+function analyzeRange() {
+    if(!window.lottoData || window.lottoData.length === 0) return;
     const val = document.getElementById("rangeSelect").value;
     currentRangeLabel = document.getElementById("rangeSelect").options[document.getElementById("rangeSelect").selectedIndex].text;
     let recent = val === "all" ? [...window.lottoData] : window.lottoData.slice(0, parseInt(val));
@@ -79,7 +98,7 @@ window.analyzeRange = function() {
     generateRecommendations(); 
 }
 
-window.generateRecommendations = function() {
+function generateRecommendations() {
     let pool = [...currentPool];
     const excludeLast = document.getElementById("excludeLastWin").checked;
     const fixedNum = parseInt(document.getElementById("fixedNumber").value);
@@ -106,7 +125,7 @@ window.generateRecommendations = function() {
     document.getElementById("share-analysis-btn").style.display = "block";
 }
 
-window.shareAnalysis = function() {
+function shareAnalysis() {
     if (!lastAnalysisText) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(lastAnalysisText).then(() => { alert("📊 분석 결과와 추천번호가 복사되었습니다!"); });
@@ -117,7 +136,7 @@ window.shareAnalysis = function() {
     }
 }
 
-window.checkHistory = function(customNums = null) {
+function checkHistory(customNums = null) {
     if(!window.lottoData || window.lottoData.length === 0) return;
     let nums = customNums || document.getElementById("userNumbers").value.split(",").map(n=>parseInt(n.trim())).filter(n=>!isNaN(n));
     if(nums.length !== 6) return alert("6개 번호를 확인하세요.");
@@ -136,5 +155,8 @@ window.checkHistory = function(customNums = null) {
         }
     });
     document.getElementById("historyResult").innerHTML = count > 0 ? html : "<p style='padding:20px; text-align:center; color:#999;'>4개 이상 적중 이력이 없습니다.</p>";
-    if(customNums) document.getElementById("historySection").scrollIntoView({behavior:'smooth'});
+    if(customNums) {
+        const target = document.getElementById("historySection");
+        if(target) target.scrollIntoView({behavior:'smooth'});
+    }
 }

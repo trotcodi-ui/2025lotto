@@ -6,7 +6,9 @@ import time
 # =========================
 # 설정: 파일 경로 및 API 주소
 # =========================
-FILE_PATH = "2025lotto_numbers_1_to_1182_final.json"
+# 💡 현재 파이썬 파일이 있는 위치를 기준으로 JSON 파일을 찾습니다.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FILE_PATH = os.path.join(BASE_DIR, "2025lotto_numbers_1_to_1182_final.json")
 BASE_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={}"
 
 HEADERS = {
@@ -19,82 +21,65 @@ HEADERS = {
 }
 
 # =========================
-# 데이터 로드 (기존 파일 읽기)
+# 데이터 로드
 # =========================
 if os.path.exists(FILE_PATH):
     with open(FILE_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
+    print(f"📂 기존 파일을 불러왔습니다: {FILE_PATH}")
 else:
+    # 만약 파일 이름이 틀렸다면 여기서 새로 빈 파일을 만들게 됩니다.
+    # 리포지토리의 파일명과 대소문자까지 똑같은지 꼭 확인하세요!
+    print(f"⚠️ 파일을 찾을 수 없어 새로 생성합니다: {FILE_PATH}")
     data = []
 
-# 이미 저장된 회차 집합 (중복 방지용)
+# 이미 저장된 회차 추출
 existing_draws = {d["draw_no"] for d in data}
-
-# 최신 회차 계산 (가장 큰 번호 찾기)
 last_draw = max(existing_draws) if existing_draws else 0
 next_draw = last_draw + 1
 
-print(f"🔍 현재 파일 내 최신 회차: {last_draw}")
-print(f"➡️ 업데이트 시작 회차: {next_draw}")
+print(f"🔍 현재 최신 회차: {last_draw} -> 다음 목표: {next_draw}")
 
 # =========================
-# 자동 업데이트 루프 (원본 로직 유지)
+# 업데이트 루프
 # =========================
 added = 0
-
 while True:
     try:
-        res = requests.get(
-            BASE_URL.format(next_draw),
-            headers=HEADERS,
-            timeout=10
-        )
-        # API 응답 체크
-        if res.status_code != 200:
-            print(f"⚠️ 연결 오류 (HTTP {res.status_code}). 중단합니다.")
-            break
-            
+        res = requests.get(BASE_URL.format(next_draw), headers=HEADERS, timeout=10)
         info = res.json()
     except Exception as e:
-        print(f"⚠️ 요청 오류: {e}")
+        print(f"❌ 오류 발생: {e}")
         break
 
-    # API 미오픈(아직 추첨 전) 시 종료
     if info.get("returnValue") != "success":
-        print(f"⏹ {next_draw}회차 API 미오픈. 업데이트를 완료합니다.")
+        print(f"⏹ {next_draw}회차 데이터가 아직 없습니다. (종료)")
         break
 
-    # 중복 방지 체크
-    if next_draw in existing_draws:
-        print(f"⚠️ {next_draw}회차 이미 존재 → 스킵")
-        next_draw += 1
-        continue
-
-    # 당첨 번호 및 보너스 번호 파싱
+    # 데이터 추가
     numbers = [info[f"drwtNo{i}"] for i in range(1, 7)]
     bonus = info["bnusNo"]
-
-    # 데이터의 맨 앞(0번 인덱스)에 삽입 (최신순 유지)
-    data.insert(0, {
+    
+    data.append({
         "draw_no": next_draw,
         "numbers": numbers,
         "bonus": bonus
     })
-
-    print(f"✅ {next_draw}회차 추가 완료 → {numbers} + 보너스 {bonus}")
-
-    existing_draws.add(next_draw)
+    
+    print(f"✅ {next_draw}회차 추가 성공!")
     added += 1
     next_draw += 1
-    time.sleep(1) # 서버 부하 방지 (1초 대기)
+    time.sleep(1)
 
 # =========================
-# 파일 저장 (변경된 내용이 있을 때만)
+# 정렬 및 저장
 # =========================
 if added > 0:
+    # 최신 회차가 맨 위로 오도록 내림차순 정렬
+    data.sort(key=lambda x: x["draw_no"], reverse=True)
+    
     with open(FILE_PATH, "w", encoding="utf-8") as f:
-        # ensure_ascii=False로 한글 깨짐 방지, indent=2로 가독성 확보
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"🎉 총 {added}개 회차 업데이트 완료 및 {FILE_PATH} 저장 성공!")
+    print(f"🎉 총 {added}개 회차 업데이트 완료!")
 else:
-    print("ℹ️ 추가된 회차 없음 (이미 모든 데이터가 최신입니다)")
+    print("ℹ️ 추가할 새로운 회차가 없습니다.")

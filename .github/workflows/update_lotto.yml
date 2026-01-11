@@ -2,12 +2,10 @@ name: Update Lotto Numbers Weekly
 
 on:
   schedule:
-    # 1. 토요일 밤 집중 체크 (23:00, 23:30, 00:00, 00:30, 01:00, 01:30 KST)
-    - cron: '0,30 14,15,16 * * 6'
-    # 2. 일요일 새벽 보험 (03:00 KST)
-    - cron: '0 18 * * 6'
-    # 3. 일요일 아침 최종 확인 (08:00 KST)
-    - cron: '0 23 * * 6'
+    # 토요일 밤 10시, 11시 (KST)
+    - cron: '0 13,14 * * 6'
+    # 일요일 00시 (토요일 밤 12시, KST)
+    - cron: '0 15 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -33,7 +31,6 @@ jobs:
 
       - name: Run Lotto Update Script
         run: |
-          # 파이썬 코드 실행 (데이터를 가져오고 JSON을 수정함)
           python update_lotto.py
 
       - name: Commit and Push if changed
@@ -41,7 +38,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 모든 변경사항을 감지하도록 수정
           git add .
 
           if git diff --cached --quiet; then

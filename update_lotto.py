@@ -1,91 +1,58 @@
 import json
 import os
-import requests
-import sys
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-# =========================
-# 1. JSON 파일 자동 찾기
-# =========================
-target_file = None
-for file in os.listdir('.'):
-    if file.endswith('.json') and 'lotto' in file.lower():
-        target_file = file
-        break
+LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
-if not target_file:
-    print("❌ 로또 JSON 파일을 찾을 수 없습니다.")
-    sys.exit(0)
+def fetch_lotto_from_screen():
+    with sync_playwright() as p:
+        # 가상 브라우저 실행 (사람인 척 접속)
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        page = context.new_page()
+        
+        print("🌐 동행복권 사이트 접속하여 화면 확인 중...")
+        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=60000)
+        
+        try:
+            # 화면의 각 위치에서 번호 추출
+            draw_no = int(page.locator("#lottoDrwNo").inner_text())
+            nums = [
+                int(page.locator("#drwtNo1").inner_text()),
+                int(page.locator("#drwtNo2").inner_text()),
+                int(page.locator("#drwtNo3").inner_text()),
+                int(page.locator("#drwtNo4").inner_text()),
+                int(page.locator("#drwtNo5").inner_text()),
+                int(page.locator("#drwtNo6").inner_text())
+            ]
+            bonus = int(page.locator("#bnusNo").inner_text())
+            
+            browser.close()
+            return {"draw_no": draw_no, "numbers": nums, "bonus": bonus}
+        except Exception as e:
+            print(f"❌ 화면 인식 실패: {e}")
+            browser.close()
+            return None
 
-print(f"✅ 파일 발견: {target_file}")
+def main():
+    if not LOCAL_FILE.exists():
+        print("❌ 파일이 존재하지 않습니다.")
+        return
 
-# =========================
-# 2. JSON 로드 (깨졌으면 중단)
-# =========================
-try:
-    with open(target_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-except Exception as e:
-    print("❌ JSON 파일이 손상되었습니다. 수동 복구 필요:", e)
-    sys.exit(0)
+    extracted = fetch_lotto_from_screen()
+    if not extracted: return
 
-existing_draws = {d["draw_no"] for d in data}
-latest_draw = max(existing_draws)
-next_draw = latest_draw + 1
+    with open(LOCAL_FILE, "r", encoding="utf-8") as f:
+        local_data = json.load(f)
 
-print(f"🔍 최신 회차: {latest_draw} → 다음 회차 시도: {next_draw}")
+    if extracted["draw_no"] > local_data[0]["draw_no"]:
+        local_data.insert(0, extracted)
+        with open(LOCAL_FILE, "w", encoding="utf-8") as f:
+            json.dump(local_data, f, ensure_ascii=False, indent=2)
+        print(f"🎉 {extracted['draw_no']}회차 화면 인식 및 업데이트 완료!")
+    else:
+        print("✅ 이미 최신 상태입니다.")
 
-# =========================
-# 3. 동행복권 API 호출
-# =========================
-BASE_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={}"
-headers = {"User-Agent": "Mozilla/5.0"}
-
-try:
-    res = requests.get(BASE_URL.format(next_draw), headers=headers, timeout=10)
-    info = res.json()
-except Exception as e:
-    print("❌ API 호출 실패:", e)
-    sys.exit(0)
-
-# =========================
-# 4. 데이터 검증
-# =========================
-if info.get("returnValue") != "success":
-    print(f"ℹ️ {next_draw}회차 데이터 아직 미공개")
-    sys.exit(0)
-
-numbers = [info.get(f"drwtNo{i}") for i in range(1, 7)]
-bonus = info.get("bnusNo")
-
-if (
-    len(numbers) != 6
-    or any(n is None for n in numbers)
-    or not isinstance(bonus, int)
-):
-    print("⚠️ 데이터가 완전하지 않아 저장하지 않습니다.")
-    sys.exit(0)
-
-# =========================
-# 5. 데이터 삽입 (중복 방지)
-# =========================
-if next_draw in existing_draws:
-    print(f"ℹ️ {next_draw}회차는 이미 존재합니다.")
-    sys.exit(0)
-
-data.insert(0, {
-    "draw_no": next_draw,
-    "numbers": numbers,
-    "bonus": bonus
-})
-
-# =========================
-# 6. 안전한 저장 (임시파일 → 교체)
-# =========================
-tmp_file = target_file + ".tmp"
-
-with open(tmp_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-
-os.replace(tmp_file, target_file)
-
-print(f"🎉 {next_draw}회차 업데이트 완료!")
+if __name__ == "__main__":
+    main()

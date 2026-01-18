@@ -1,74 +1,47 @@
-import json
-import requests
-from pathlib import Path
+name: Update Lotto Numbers Weekly
 
-FILE_PATH = "2025lotto_numbers_1_to_1182_final.json"
-API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={}"
+on:
+  schedule:
+    - cron: '0 13 * * 6'  # 토요일 22시 KST
+    - cron: '0 14 * * 6'  # 토요일 23시 KST
+    - cron: '0 15 * * 0'  # 일요일 00시 KST
+  workflow_dispatch:
 
-def main():
-    # 1️⃣ JSON 파일 존재 확인
-    if not Path(FILE_PATH).exists():
-        print("로또 JSON 파일이 없습니다.")
-        return
+permissions:
+  contents: write
 
-    # 2️⃣ JSON 로드
-    with open(FILE_PATH, "r", encoding="utf-8") as f:
-        lotto_data = json.load(f)
+jobs:
+  update:
+    runs-on: ubuntu-latest
 
-    if not lotto_data:
-        print("로또 데이터가 비어 있습니다.")
-        return
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # 3️⃣ 최신 회차 정확히 계산 (중요!)
-    latest_draw = max(item["draw_no"] for item in lotto_data)
-    next_draw = latest_draw + 1
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    print(f"마지막 회차: {latest_draw}")
-    print(f"조회할 회차: {next_draw}")
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
-    # 4️⃣ API 호출
-    try:
-        res = requests.get(API_URL.format(next_draw), timeout=10)
-        res.raise_for_status()
-        data = res.json()
-    except Exception as e:
-        print("API 호출 실패:", e)
-        return
+      - name: Run Lotto Update Script
+        run: |
+          python update_lotto.py
 
-    print("API 응답:", data)
+      - name: Commit and Push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    # 5️⃣ 아직 발표 안 됐으면 종료
-    if data.get("returnValue") != "success":
-        print("아직 발표되지 않은 회차입니다.")
-        return
+          git add .
 
-    # 6️⃣ 새 회차 데이터 구성
-    new_entry = {
-        "draw_no": data["drwNo"],
-        "numbers": [
-            data["drwtNo1"],
-            data["drwtNo2"],
-            data["drwtNo3"],
-            data["drwtNo4"],
-            data["drwtNo5"],
-            data["drwtNo6"],
-        ],
-        "bonus": data["bnusNo"]
-    }
-
-    # 7️⃣ 중복 방지
-    if any(d["draw_no"] == new_entry["draw_no"] for d in lotto_data):
-        print("이미 저장된 회차입니다.")
-        return
-
-    # 8️⃣ 최신 회차를 맨 앞에 추가
-    lotto_data.insert(0, new_entry)
-
-    # 9️⃣ 저장
-    with open(FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(lotto_data, f, ensure_ascii=False, indent=2)
-
-    print(f"{next_draw}회차 저장 완료")
-
-if __name__ == "__main__":
-    main()
+          if git diff --cached --quiet; then
+            echo "변경사항 없음: 최신 회차가 아직 없거나 이미 업데이트되었습니다."
+          else
+            git commit -m "Auto update lotto numbers (Scheduled Check)"
+            git push
+          fi

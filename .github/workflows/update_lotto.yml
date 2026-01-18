@@ -3,74 +3,60 @@ import requests
 from pathlib import Path
 
 FILE_PATH = "2025lotto_numbers_1_to_1182_final.json"
-API_URL = "https://www.dhlottery.co.kr/common.do"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Referer": "https://www.dhlottery.co.kr/",
-}
+MIRROR_URL = "https://raw.githubusercontent.com/zeeyang/lotto-history/master/lotto.json"
 
 def main():
     if not Path(FILE_PATH).exists():
-        print("로또 JSON 파일이 없습니다.")
+        print("❌ 로컬 JSON 파일 없음")
         return
 
+    # 로컬 데이터 로드
     with open(FILE_PATH, "r", encoding="utf-8") as f:
-        lotto_data = json.load(f)
+        local_data = json.load(f)
 
-    latest_draw = max(item["draw_no"] for item in lotto_data)
-    next_draw = latest_draw + 1
+    latest_local_draw = max(item["draw_no"] for item in local_data)
+    print(f"📌 로컬 최신 회차: {latest_local_draw}")
 
-    print(f"최신 회차: {latest_draw} → 다음 회차 시도: {next_draw}")
-
+    # 미러 JSON 로드
     try:
-        res = requests.get(
-            API_URL,
-            params={
-                "method": "getLottoNumber",
-                "drwNo": next_draw
-            },
-            headers=HEADERS,
-            timeout=10
-        )
-
-        print("HTTP 상태:", res.status_code)
-        print("응답 앞부분:", res.text[:200])
-
-        data = res.json()
-
+        res = requests.get(MIRROR_URL, timeout=15)
+        res.raise_for_status()
+        mirror_data = res.json()
     except Exception as e:
-        print("❌ API 호출 실패:", e)
+        print("❌ 미러 JSON 로드 실패:", e)
         return
 
-    if data.get("returnValue") != "success":
-        print("아직 발표되지 않은 회차")
+    # 미러 최신 회차
+    latest_mirror = max(mirror_data, key=lambda x: x["drwNo"])
+    mirror_draw_no = latest_mirror["drwNo"]
+
+    print(f"🌐 미러 최신 회차: {mirror_draw_no}")
+
+    if mirror_draw_no <= latest_local_draw:
+        print("✅ 이미 최신 상태")
         return
 
+    # 새 회차 변환
     new_entry = {
-        "draw_no": data["drwNo"],
+        "draw_no": mirror_draw_no,
         "numbers": [
-            data["drwtNo1"],
-            data["drwtNo2"],
-            data["drwtNo3"],
-            data["drwtNo4"],
-            data["drwtNo5"],
-            data["drwtNo6"],
+            latest_mirror["drwtNo1"],
+            latest_mirror["drwtNo2"],
+            latest_mirror["drwtNo3"],
+            latest_mirror["drwtNo4"],
+            latest_mirror["drwtNo5"],
+            latest_mirror["drwtNo6"],
         ],
-        "bonus": data["bnusNo"]
+        "bonus": latest_mirror["bnusNo"]
     }
 
-    if any(d["draw_no"] == new_entry["draw_no"] for d in lotto_data):
-        print("이미 존재하는 회차")
-        return
-
-    lotto_data.insert(0, new_entry)
+    # 맨 앞에 추가
+    local_data.insert(0, new_entry)
 
     with open(FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(lotto_data, f, ensure_ascii=False, indent=2)
+        json.dump(local_data, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ {next_draw}회차 저장 완료")
+    print(f"🎉 {mirror_draw_no}회차 업데이트 완료")
 
 if __name__ == "__main__":
     main()

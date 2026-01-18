@@ -2,8 +2,9 @@ name: Lotto Auto Update
 
 on:
   schedule:
-    - cron: '0 13 * * 6'
-    - cron: '0 15 * * 0'
+    # 한국 시간: 토요일 21:00, 22:00, 23:00 / 일요일 00:00 (자정)
+    # UTC 기준: 토요일 12:00, 13:00, 14:00, 15:00
+    - cron: '0 12,13,14,15 * * 6'
   workflow_dispatch:
 
 permissions:
@@ -21,10 +22,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Browser Install
+      # API 방식은 브라우저 설치가 필요 없으나, 기존 코드 유지를 위해 둠
+      - name: Dependencies Install
         run: |
-          pip install playwright
-          playwright install chromium
+          pip install requests
 
       - name: Run Update
         run: python update_lotto.py
@@ -34,7 +35,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
+          # 변경사항이 있을 때만 커밋하고 푸시 (중복 방지 핵심)
           if ! git diff --cached --quiet; then
-            git commit -m "Auto update via Browser"
+            git commit -m "Auto update: New lotto numbers added"
             git push
+          else
+            echo "No changes detected. Skip push."
           fi

@@ -1,4 +1,4 @@
-name: Update Lotto via Screen Recognition
+name: Lotto Auto Update
 
 on:
   schedule:
@@ -10,31 +10,31 @@ permissions:
   contents: write
 
 jobs:
-  run-lotto-update:
+  run-update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Python Setup
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Browser Environment
+      - name: Browser Install
         run: |
           pip install playwright
           playwright install chromium
 
-      - name: Execute Script
+      - name: Run Update
         run: python update_lotto.py
 
-      - name: Push Changes
+      - name: Push Change
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           if ! git diff --cached --quiet; then
-            git commit -m "Auto update: Latest numbers from screen"
+            git commit -m "Auto update via Browser"
             git push
           fi

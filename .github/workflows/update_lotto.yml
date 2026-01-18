@@ -3,38 +3,35 @@ import requests
 import time
 from pathlib import Path
 
-# 캐시 방지를 위해 매번 다른 URL로 인식되게 함
-ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?nocache={int(time.time())}"
+# 캐시 방지를 위해 타임스탬프 파라미터 추가
+ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?t={int(time.time())}"
 LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
 def main():
     if not LOCAL_FILE.exists():
-        print(f"❌ 파일 없음: {LOCAL_FILE}")
+        print(f"❌ 파일을 찾을 수 없음: {LOCAL_FILE}")
         return
 
-    # 브라우저인 것처럼 속여서 서버 차단 회피 (가장 중요)
+    # 브라우저인 것처럼 속여 보안 차단 회피
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
+        'Cache-Control': 'no-cache'
     }
 
     try:
-        print(f"🌐 데이터 가져오는 중... ({ALL_JSON_URL})")
-        res = requests.get(ALL_JSON_URL, headers=headers, timeout=15)
+        print(f"🌐 데이터 호출 중: {ALL_JSON_URL}")
+        res = requests.get(ALL_JSON_URL, headers=headers, timeout=20)
         res.raise_for_status()
-        
-        # 받아온 데이터가 진짜 JSON인지 확인
         all_data = res.json()
-        print(f"✅ 데이터 수집 성공 (총 {len(all_data)}개 회차 확인됨)")
     except Exception as e:
-        print(f"❌ 데이터 호출 실패: {e}")
+        print(f"❌ 데이터 수집 실패: {e}")
         return
 
     with open(LOCAL_FILE, "r", encoding="utf-8") as f:
         local_data = json.load(f)
 
     local_latest = local_data[0]["draw_no"]
-    latest_item = all_data[-1] # 원본 데이터의 마지막이 최신 회차
+    latest_item = all_data[-1] # 리스트의 마지막이 최신 회차
     latest_draw = latest_item["draw_no"]
 
     print(f"📌 현재 로컬: {local_latest}회 / 가져온 데이터: {latest_draw}회")
@@ -45,11 +42,11 @@ def main():
             "numbers": latest_item["numbers"],
             "bonus": latest_item["bonus_no"]
         }
-        local_data.insert(0, new_entry) # 맨 앞에 추가
+        local_data.insert(0, new_entry)
         
         with open(LOCAL_FILE, "w", encoding="utf-8") as f:
             json.dump(local_data, f, ensure_ascii=False, indent=2)
-        print(f"🎉 {latest_draw}회차 업데이트 완료!")
+        print(f"🎉 {latest_draw}회차 업데이트 성공!")
     else:
         print("✅ 이미 최신 상태입니다.")
 

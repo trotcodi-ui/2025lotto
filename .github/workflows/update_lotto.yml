@@ -3,7 +3,7 @@ import requests
 import time
 from pathlib import Path
 
-# 캐시 방지를 위해 타임스탬프 파라미터 추가
+# 캐시 방지를 위해 타임스탬프를 URL에 포함
 ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?t={int(time.time())}"
 LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
@@ -12,10 +12,10 @@ def main():
         print(f"❌ 파일을 찾을 수 없음: {LOCAL_FILE}")
         return
 
-    # 브라우저인 것처럼 속여 보안 차단 회피
+    # 브라우저인 것처럼 속여 보안 차단을 피함 (가장 중요)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cache-Control': 'no-cache'
+        'Accept': 'application/json'
     }
 
     try:
@@ -31,7 +31,7 @@ def main():
         local_data = json.load(f)
 
     local_latest = local_data[0]["draw_no"]
-    latest_item = all_data[-1] # 리스트의 마지막이 최신 회차
+    latest_item = all_data[-1] # 리스트의 마지막 요소가 최신 1207회
     latest_draw = latest_item["draw_no"]
 
     print(f"📌 현재 로컬: {local_latest}회 / 가져온 데이터: {latest_draw}회")
@@ -42,7 +42,7 @@ def main():
             "numbers": latest_item["numbers"],
             "bonus": latest_item["bonus_no"]
         }
-        local_data.insert(0, new_entry)
+        local_data.insert(0, new_entry) # 맨 앞에 추가
         
         with open(LOCAL_FILE, "w", encoding="utf-8") as f:
             json.dump(local_data, f, ensure_ascii=False, indent=2)

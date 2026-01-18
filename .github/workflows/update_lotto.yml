@@ -3,33 +3,34 @@ import requests
 import time
 from pathlib import Path
 
-# 캐시 방지를 위한 파라미터 추가
+# 캐시 방지를 위해 타임스탬프 추가
 ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?t={int(time.time())}"
 LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
 def main():
     if not LOCAL_FILE.exists():
-        print(f"❌ 로컬 파일을 찾을 수 없습니다: {LOCAL_FILE}")
+        print(f"❌ 파일을 찾을 수 없음: {LOCAL_FILE}")
         return
 
-    # 브라우저인 것처럼 속이는 헤더 (차단 방지 핵심)
+    # 보안 차단 방지를 위한 브라우저 헤더
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cache-Control': 'no-cache'
     }
 
     try:
-        print(f"🌐 데이터 가져오는 중: {ALL_JSON_URL}")
+        print(f"🌐 데이터 호출 중: {ALL_JSON_URL}")
         res = requests.get(ALL_JSON_URL, headers=headers, timeout=20)
         res.raise_for_status()
         
-        # JSON 응답인지 검증
-        if "application/json" not in res.headers.get("Content-Type", "").lower():
-            print("⚠️ 경고: 응답이 JSON 형식이 아닙니다. (HTML 에러 페이지일 가능성)")
+        # JSON 데이터인지 검증
+        all_data = res.json()
+        if not isinstance(all_data, list):
+            print("❌ 데이터 형식이 올바르지 않습니다 (배열 아님)")
             return
             
-        all_data = res.json()
     except Exception as e:
-        print(f"❌ 데이터 수집 실패: {e}")
+        print(f"❌ API 호출 실패: {e}")
         return
 
     with open(LOCAL_FILE, "r", encoding="utf-8") as f:
@@ -39,19 +40,19 @@ def main():
     latest_item = all_data[-1]
     latest_draw = latest_item["draw_no"]
 
-    print(f"📌 현재 로컬: {local_latest}회 / GitHub 최신: {latest_draw}회")
+    print(f"📌 현재 상태 - 로컬: {local_latest}회 / 원본: {latest_draw}회")
 
     if latest_draw > local_latest:
         new_entry = {
             "draw_no": latest_draw,
             "numbers": latest_item["numbers"],
-            "bonus": latest_item["bonus_no"] # 원본의 bonus_no를 bonus로 변환
+            "bonus": latest_item["bonus_no"]
         }
         local_data.insert(0, new_entry)
         
         with open(LOCAL_FILE, "w", encoding="utf-8") as f:
             json.dump(local_data, f, ensure_ascii=False, indent=2)
-        print(f"🎉 {latest_draw}회차 업데이트 완료!")
+        print(f"🎉 {latest_draw}회차 업데이트 성공!")
     else:
         print("✅ 이미 최신 상태입니다.")
 

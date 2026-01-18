@@ -1,45 +1,65 @@
-name: Update Lotto Numbers Weekly
+import json
+import requests
+import time
+from pathlib import Path
 
-on:
-  schedule:
-    # 한국 시간(KST) 토요일 22:00, 23:00, 일요일 00:00 (UTC 13, 14, 15)
-    - cron: '0 13 * * 6'
-    - cron: '0 14 * * 6'
-    - cron: '0 15 * * 0'
-  workflow_dispatch: # 수동 실행 버튼 활성화
+# 캐시 방지를 위해 쿼리 스트링 추가
+ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?nocache={int(time.time())}"
+LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
-permissions:
-  contents: write
+def main():
+    # 1. 로컬 파일 확인
+    if not LOCAL_FILE.exists():
+        print(f"❌ 파일을 찾을 수 없음: {LOCAL_FILE}")
+        return
 
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    with open(LOCAL_FILE, "r", encoding="utf-8") as f:
+        local_data = json.load(f)
+    
+    local_latest = local_data[0]["draw_no"]
+    print(f"📌 로컬 현재 최신: {local_latest}회")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    # 2. GitHub 데이터 가져오기 (헤더 추가로 차단 방지)
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(ALL_JSON_URL, headers=headers, timeout=20)
+        res.raise_for_status()
+        
+        # 텍스트 응답 확인 (JSON인지 확인)
+        content = res.text.strip()
+        if not content.startswith('['):
+            print("❌ 받은 데이터가 JSON 배열 형식이 아닙니다.")
+            return
+            
+        all_data = res.json()
+    except Exception as e:
+        print(f"❌ 데이터 수집 실패: {e}")
+        return
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+    # 3. 최신 회차 비교 및 업데이트
+    # 리스트의 마지막 요소가 1207회인지 확인
+    latest = all_data[-1]
+    latest_draw = latest["draw_no"]
+    print(f"🌐 GitHub 상의 최신: {latest_draw}회")
 
-      - name: Run Lotto Update Script
-        run: python update_lotto.py
+    if latest_draw <= local_latest:
+        print("✅ 이미 최신 상태입니다.")
+        return
 
-      - name: Commit and Push if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          # 변경사항이 있을 때만 커밋 수행
-          if git diff --cached --quiet; then
-            echo "변경사항 없음: 데이터가 이미 최신이거나 업데이트가 필요하지 않습니다."
-          else
-            git commit -m "Auto update: Add latest lotto results"
-            git push
-          fi
+    # 4. 새 데이터 삽입 (구조 맞춤: bonus_no -> bonus)
+    new_entry = {
+        "draw_no": latest_draw,
+        "numbers": latest["numbers"],
+        "bonus": latest["bonus_no"] # 받아온 데이터의 키 이름에 맞춤
+    }
+
+    local_data.insert(0, new_entry)
+
+    # 5. 저장
+    with open(LOCAL_FILE, "w", encoding="utf-8") as f:
+        json.dump(local_data, f, ensure_ascii=False, indent=2)
+
+    print(f"🎉 {latest_draw}회차 업데이트 완료!")
+
+if __name__ == "__main__":
+    main()

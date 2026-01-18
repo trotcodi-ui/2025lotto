@@ -14,11 +14,12 @@ def main():
     with open(LOCAL_FILE, "r", encoding="utf-8") as f:
         local_data = json.load(f)
 
-    local_latest = max(item["draw_no"] for item in local_data)
+    # ✅ 로컬 최신 회차 = 첫 번째 요소
+    local_latest = local_data[0]["draw_no"]
     print(f"📌 로컬 최신 회차: {local_latest}")
 
-    # 2️⃣ 전체 회차 JSON 로드
-    res = requests.get(ALL_JSON_URL, timeout=15)
+    # 2️⃣ GitHub 전체 JSON 로드
+    res = requests.get(ALL_JSON_URL, timeout=20)
     res.raise_for_status()
     all_data = res.json()
 
@@ -26,27 +27,30 @@ def main():
         print("❌ all.json 비어 있음")
         return
 
-    # 3️⃣ 최신 회차 = 맨 마지막
+    # ✅ GitHub 최신 회차 = 마지막 요소
     latest = all_data[-1]
     latest_draw = latest["draw_no"]
+    print(f"🌐 GitHub 최신 회차: {latest_draw}")
 
-    print(f"🌐 미러 최신 회차: {latest_draw}")
-
-    if latest_draw <= local_latest:
+    # 3️⃣ 최신 회차가 같거나 작으면 종료
+    if latest_draw == local_latest:
         print("✅ 이미 최신 상태")
         return
 
-    # 4️⃣ 포맷 변환
+    if latest_draw < local_latest:
+        print("⚠️ 로컬 데이터가 더 최신임 (비정상)")
+        return
+
+    # 4️⃣ 최신 회차 1개만 추가
     new_entry = {
         "draw_no": latest_draw,
         "numbers": latest["numbers"],
         "bonus": latest["bonus_no"]
     }
 
-    # 5️⃣ 맨 앞에 추가
     local_data.insert(0, new_entry)
 
-    # 6️⃣ 저장
+    # 5️⃣ 저장
     with open(LOCAL_FILE, "w", encoding="utf-8") as f:
         json.dump(local_data, f, ensure_ascii=False, indent=2)
 

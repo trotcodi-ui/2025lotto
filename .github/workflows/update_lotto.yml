@@ -1,60 +1,45 @@
-import json
-import requests
-from pathlib import Path
+name: Update Lotto Numbers Weekly
 
-ALL_JSON_URL = "https://smok95.github.io/lotto/results/all.json"
-LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
+on:
+  schedule:
+    # 한국 시간(KST) 토요일 22:00, 23:00, 일요일 00:00 (UTC 13, 14, 15)
+    - cron: '0 13 * * 6'
+    - cron: '0 14 * * 6'
+    - cron: '0 15 * * 0'
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
-def main():
-    # 1️⃣ 로컬 JSON 로드
-    if not LOCAL_FILE.exists():
-        print("❌ 로컬 JSON 파일 없음")
-        return
+permissions:
+  contents: write
 
-    with open(LOCAL_FILE, "r", encoding="utf-8") as f:
-        local_data = json.load(f)
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # ✅ 로컬 최신 회차 = 첫 번째 요소
-    local_latest = local_data[0]["draw_no"]
-    print(f"📌 로컬 최신 회차: {local_latest}")
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    # 2️⃣ GitHub 전체 JSON 로드
-    res = requests.get(ALL_JSON_URL, timeout=20)
-    res.raise_for_status()
-    all_data = res.json()
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
-    if not all_data:
-        print("❌ all.json 비어 있음")
-        return
+      - name: Run Lotto Update Script
+        run: python update_lotto.py
 
-    # ✅ GitHub 최신 회차 = 마지막 요소
-    latest = all_data[-1]
-    latest_draw = latest["draw_no"]
-    print(f"🌐 GitHub 최신 회차: {latest_draw}")
-
-    # 3️⃣ 최신 회차가 같거나 작으면 종료
-    if latest_draw == local_latest:
-        print("✅ 이미 최신 상태")
-        return
-
-    if latest_draw < local_latest:
-        print("⚠️ 로컬 데이터가 더 최신임 (비정상)")
-        return
-
-    # 4️⃣ 최신 회차 1개만 추가
-    new_entry = {
-        "draw_no": latest_draw,
-        "numbers": latest["numbers"],
-        "bonus": latest["bonus_no"]
-    }
-
-    local_data.insert(0, new_entry)
-
-    # 5️⃣ 저장
-    with open(LOCAL_FILE, "w", encoding="utf-8") as f:
-        json.dump(local_data, f, ensure_ascii=False, indent=2)
-
-    print(f"🎉 {latest_draw}회차 업데이트 완료")
-
-if __name__ == "__main__":
-    main()
+      - name: Commit and Push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          # 변경사항이 있을 때만 커밋 수행
+          if git diff --cached --quiet; then
+            echo "변경사항 없음: 데이터가 이미 최신이거나 업데이트가 필요하지 않습니다."
+          else
+            git commit -m "Auto update: Add latest lotto results"
+            git push
+          fi

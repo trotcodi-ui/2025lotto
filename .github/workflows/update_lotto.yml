@@ -1,47 +1,55 @@
-name: Update Lotto Numbers Weekly
+import json
+import requests
+from pathlib import Path
 
-on:
-  schedule:
-    # 토요일 22시 KST = 13시 UTC
-    - cron: '0 13 * * 6'
-    # 일요일 00시 KST = 15시 UTC
-    - cron: '0 15 * * 0'
-  workflow_dispatch:
+# 🔒 동행 API 완전 미사용
+MIRROR_URL = "https://raw.githubusercontent.com/zeeyang/lotto-history/master/lotto.json"
+OUTPUT_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
 
-permissions:
-  contents: write
+print("📥 GitHub 미러 JSON 로딩 중...")
 
-jobs:
-  update:
-    runs-on: ubuntu-latest
+res = requests.get(MIRROR_URL, timeout=15)
+res.raise_for_status()
+mirror = res.json()
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+print(f"📦 미러 총 회차 수: {len(mirror)}")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+# 기존 파일 로드
+existing = []
+if OUTPUT_FILE.exists():
+    with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+        existing = json.load(f)
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+existing_draws = {d["draw_no"] for d in existing}
 
-      - name: Run Lotto Update Script
-        run: python update_lotto.py
+new_items = []
 
-      - name: Commit and Push if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+for item in mirror:
+    draw_no = item.get("drwNo")
+    if draw_no is None or draw_no in existing_draws:
+        continue
 
-          git add .
+    new_items.append({
+        "draw_no": draw_no,
+        "numbers": [
+            item["drwtNo1"],
+            item["drwtNo2"],
+            item["drwtNo3"],
+            item["drwtNo4"],
+            item["drwtNo5"],
+            item["drwtNo6"],
+        ],
+        "bonus": item["bnusNo"]
+    })
 
-          if git diff --cached --quiet; then
-            echo "변경사항 없음"
-          else
-            git commit -m "Auto update lotto numbers"
-            git push
-          fi
+if not new_items:
+    print("✅ 추가할 새 회차 없음")
+else:
+    print(f"🆕 새 회차 {len(new_items)}개 추가")
+
+    existing.extend(sorted(new_items, key=lambda x: x["draw_no"]))
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
+
+    print("💾 JSON 업데이트 완료")

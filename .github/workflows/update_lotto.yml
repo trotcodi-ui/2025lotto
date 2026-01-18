@@ -1,54 +1,50 @@
 import json
 import requests
-import time
 from pathlib import Path
 
-# 캐시 방지를 위해 타임스탬프를 URL에 포함
-ALL_JSON_URL = f"https://smok95.github.io/lotto/results/all.json?t={int(time.time())}"
+# 동행복권 공식 API 주소
+API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo="
 LOCAL_FILE = Path("2025lotto_numbers_1_to_1182_final.json")
+
+def get_lotto_data(draw_no):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    try:
+        res = requests.get(f"{API_URL}{draw_no}", headers=headers, timeout=15)
+        res.raise_for_status()
+        data = res.json()
+        if data.get("returnValue") == "success":
+            return {
+                "draw_no": draw_no,
+                "numbers": [data[f"drwtNo{i}"] for i in range(1, 7)],
+                "bonus": data["bnusNo"]
+            }
+    except Exception as e:
+        print(f"❌ {draw_no}회차 호출 실패: {e}")
+    return None
 
 def main():
     if not LOCAL_FILE.exists():
-        print(f"❌ 파일을 찾을 수 없음: {LOCAL_FILE}")
-        return
-
-    # 브라우저인 것처럼 속여 보안 차단을 피함 (가장 중요)
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
-    }
-
-    try:
-        print(f"🌐 데이터 호출 중: {ALL_JSON_URL}")
-        res = requests.get(ALL_JSON_URL, headers=headers, timeout=20)
-        res.raise_for_status()
-        all_data = res.json()
-    except Exception as e:
-        print(f"❌ 데이터 수집 실패: {e}")
+        print("❌ 로컬 JSON 파일을 찾을 수 없습니다.")
         return
 
     with open(LOCAL_FILE, "r", encoding="utf-8") as f:
         local_data = json.load(f)
 
-    local_latest = local_data[0]["draw_no"]
-    latest_item = all_data[-1] # 리스트의 마지막 요소가 최신 1207회
-    latest_draw = latest_item["draw_no"]
+    # 내 파일의 가장 최신 회차 확인 후 다음 회차 결정
+    last_draw = local_data[0]["draw_no"]
+    target_draw = last_draw + 1
+    
+    print(f"📌 현재 내 파일 최신: {last_draw}회 / 새로 가져올 회차: {target_draw}회")
 
-    print(f"📌 현재 로컬: {local_latest}회 / 가져온 데이터: {latest_draw}회")
+    new_entry = get_lotto_data(target_draw)
 
-    if latest_draw > local_latest:
-        new_entry = {
-            "draw_no": latest_draw,
-            "numbers": latest_item["numbers"],
-            "bonus": latest_item["bonus_no"]
-        }
-        local_data.insert(0, new_entry) # 맨 앞에 추가
-        
+    if new_entry:
+        local_data.insert(0, new_entry) # 맨 앞에 새 데이터 삽입
         with open(LOCAL_FILE, "w", encoding="utf-8") as f:
             json.dump(local_data, f, ensure_ascii=False, indent=2)
-        print(f"🎉 {latest_draw}회차 업데이트 성공!")
+        print(f"🎉 {target_draw}회차(1207회 등) 업데이트 성공!")
     else:
-        print("✅ 이미 최신 상태입니다.")
+        print(f"ℹ️ {target_draw}회차 데이터가 아직 공식 사이트에 업데이트되지 않았습니다.")
 
 if __name__ == "__main__":
     main()

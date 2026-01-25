@@ -1,61 +1,55 @@
 import requests
-from bs4 import BeautifulSoup
 import json
 import os
 
+# 사용자님이 제공해주신 구글 시트 주소 (CSV 모드로 변환)
+GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSd2GO5CSmSb7VgZCpGQBFLuHE-MI0b0agXPxSUXFZjo0S2H3CqfbmfIjz3vIpE4C7RJdhfq_MnSbA1/pub?output=csv"
 LOTTO_JSON_PATH = '2025lotto_numbers_1_to_1182_final.json'
 
-def get_lotto_from_portal(draw_no):
-    # 포털의 로또 검색 결과 페이지 흉내 (검색 결과로 바로 접근)
-    url = f"https://search.naver.com/search.naver?query={draw_no}회+로또"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-    }
-
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # 네이버 검색 결과 내 당첨 번호 추출 (구조는 주기적으로 변하지만 현재 가장 확실한 방법)
-        balls = soup.select('.num_box .num')
-        date_tag = soup.select_one('.sub_title')
-
-        if len(balls) >= 7:
-            numbers = [int(b.text) for b in balls[:6]]
-            bonus = int(balls[6].text)
-            
-            return {
-                "draw_no": draw_no,
-                "date": date_tag.text if date_tag else "2026-01-24", # 예시 날짜
-                "numbers": numbers,
-                "bonus": bonus
-            }
-    except:
-        return None
-    return None
-
 def update_lotto_data():
+    # 1. 기존 데이터 로드
     if os.path.exists(LOTTO_JSON_PATH):
-        with open(LOTTO_JSON_PATH, 'r', encoding='utf-8') as f:
-            lotto_data = json.load(f)
+        try:
+            with open(LOTTO_JSON_PATH, 'r', encoding='utf-8') as f:
+                lotto_data = json.load(f)
+        except:
+            lotto_data = []
     else:
         lotto_data = []
 
     last_draw = max([d['draw_no'] for d in lotto_data]) if lotto_data else 0
     target_draw = last_draw + 1
-    
-    print(f"🔎 Gemini 방식(포털 추적) 가동 - 목표: {target_draw}회")
+    print(f"🎯 구글 시트 우회 방식 가동 - 목표: {target_draw}회")
 
-    result = get_lotto_from_portal(target_draw)
+    try:
+        # 2. 구글 시트에서 데이터 읽기
+        response = requests.get(GOOGLE_SHEET_CSV_URL, timeout=15)
+        if response.status_code == 200:
+            # CSV 데이터 파싱 (구글 시트 수식 결과가 한 줄씩 들어옴)
+            lines = response.text.strip().split('\n')
+            # 숫자만 추출 (수식 결과로 나온 값들)
+            extracted_numbers = [line.strip().replace('"', '') for line in lines if line.strip()]
+            
+            if len(extracted_numbers) >= 7:
+                new_entry = {
+                    "draw_no": target_draw,
+                    "date": "2026-01-24", # 구글 시트에서 날짜까지 가져오도록 확장 가능
+                    "numbers": [int(n) for n in extracted_numbers[:6]],
+                    "bonus": int(extracted_numbers[6])
+                }
 
-    if result:
-        lotto_data.append(result)
-        lotto_data.sort(key=lambda x: x['draw_no'], reverse=True)
-        with open(LOTTO_JSON_PATH, 'w', encoding='utf-8') as f:
-            json.dump(lotto_data, f, ensure_ascii=False, indent=4)
-        print(f"✅ {target_draw}회 업데이트 완료! (포털 우회 성공)")
-    else:
-        print(f"❌ 아직 포털에도 {target_draw}회 결과가 올라오지 않았거나 차단되었습니다.")
+                lotto_data.append(new_entry)
+                lotto_data.sort(key=lambda x: x['draw_no'], reverse=True)
+
+                with open(LOTTO_JSON_PATH, 'w', encoding='utf-8') as f:
+                    json.dump(lotto_data, f, ensure_ascii=False, indent=4)
+                print(f"✅ {target_draw}회 업데이트 성공! (구글 시트 우회 완료)")
+            else:
+                print(f"❌ 구글 시트에서 번호를 충분히 찾지 못했습니다. (현재 개수: {len(extracted_numbers)})")
+        else:
+            print(f"⚠️ 구글 시트 접근 실패 (상태 코드: {response.status_code})")
+    except Exception as e:
+        print(f"❗ 오류 발생: {e}")
 
 if __name__ == "__main__":
     update_lotto_data()

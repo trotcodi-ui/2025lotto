@@ -1,51 +1,54 @@
 import requests
 import re
-from bs4 import BeautifulSoup
 
 def get_latest_lotto():
-    url = "https://search.daum.net/search?w=tot&q=로또"
+    # 1️⃣ 먼저 동행복권 API 시도
+    api_url = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=0"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    try:
+        r = requests.get(
+            api_url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://www.dhlottery.co.kr/"
+            },
+            timeout=10
+        )
+        data = r.json()
 
-    res = requests.get(url, headers=headers, timeout=10)
-    res.raise_for_status()
+        if data.get("returnValue") == "success":
+            return {
+                "round": data["drwNo"],
+                "numbers": [
+                    data["drwtNo1"],
+                    data["drwtNo2"],
+                    data["drwtNo3"],
+                    data["drwtNo4"],
+                    data["drwtNo5"],
+                    data["drwtNo6"],
+                ],
+                "bonus": data["bnusNo"]
+            }
+    except Exception:
+        pass
 
-    html = res.text
+    # 2️⃣ (백업) Daum 크롤링 – 로컬용
+    daum_url = "https://search.daum.net/search?w=tot&q=로또"
+    html = requests.get(
+        daum_url,
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=10
+    ).text
 
-    # 🔹 회차 추출 (예: 1208회)
     round_match = re.search(r'(\d+)회', html)
     if not round_match:
-        raise Exception("회차 추출 실패")
+        raise Exception("회차 추출 실패 (Daum)")
 
     round_no = round_match.group(1)
-
-    # 🔹 번호 추출 (공 아이콘 숫자)
-    soup = BeautifulSoup(html, "html.parser")
-    balls = soup.select('span[class*="ball"]')
-
-    numbers = []
-    for b in balls:
-        text = b.get_text(strip=True)
-        if text.isdigit():
-            numbers.append(int(text))
-
-    if len(numbers) < 7:
-        raise Exception(f"번호 부족: {numbers}")
-
-    numbers = numbers[:7]  # 6개 + 보너스
+    numbers = list(map(int, re.findall(r'class="ball[^"]*">(\d+)<', html)[:7]))
 
     return {
         "round": round_no,
         "numbers": numbers[:6],
         "bonus": numbers[6]
     }
-
-
-if __name__ == "__main__":
-    lotto = get_latest_lotto()
-
-    print(f"{lotto['round']}회")
-    print("당첨번호:", lotto["numbers"])
-    print("보너스:", lotto["bonus"])

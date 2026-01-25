@@ -21,37 +21,53 @@ def update_lotto_data():
 
     print(f"현재 최신 회차: {last_draw} / 조회 시도 회차: {target_draw}")
 
-    # 브라우저 위장 헤더 (차단 방지)
+    # 동행복권 서버가 실제 브라우저로 인식하게 만드는 필수 헤더 정보
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.dhlottery.co.kr/common.do?method=main",
+        "X-Requested-With": "XMLHttpRequest"
     }
 
     try:
-        response = requests.get(f"{API_URL}{target_draw}", headers=headers, timeout=10)
+        # API 요청
+        response = requests.get(f"{API_URL}{target_draw}", headers=headers, timeout=15)
+        
         if response.status_code == 200:
             try:
+                # 응답이 비어있지 않은지 확인
+                if not response.text.strip():
+                    print("⚠️ 서버에서 빈 응답을 보냈습니다.")
+                    return
+
                 result = response.json()
+                
                 if result.get("returnValue") == "success":
                     new_entry = {
-                        "draw_no": result["drwNo"],
+                        "draw_no": int(result["drwNo"]),
                         "date": result["drwNoDate"],
                         "numbers": [
-                            result["drwtNo1"], result["drwtNo2"], result["drwtNo3"],
-                            result["drwtNo4"], result["drwtNo5"], result["drwtNo6"]
+                            int(result["drwtNo1"]), int(result["drwtNo2"]), int(result["drwtNo3"]),
+                            int(result["drwtNo4"]), int(result["drwtNo5"]), int(result["drwtNo6"])
                         ],
-                        "bonus": result["bnusNo"]
+                        "bonus": int(result["bnusNo"])
                     }
                     lotto_data.append(new_entry)
                     lotto_data.sort(key=lambda x: x['draw_no'], reverse=True)
+                    
                     with open(LOTTO_JSON_PATH, 'w', encoding='utf-8') as f:
                         json.dump(lotto_data, f, ensure_ascii=False, indent=4)
                     print(f"✅ {target_draw}회 업데이트 성공!")
                 else:
-                    print(f"❌ {target_draw}회차 데이터가 아직 없습니다.")
-            except:
-                print("⚠️ 서버 응답 해석 실패")
+                    print(f"❌ {target_draw}회차 데이터가 아직 준비되지 않았습니다.")
+            except Exception as e:
+                print(f"⚠️ 서버 응답 해석 실패: {e}")
+                print(f"서버가 보낸 내용 요약: {response.text[:100]}")
+        else:
+            print(f"⚠️ API 연결 실패 (상태 코드: {response.status_code})")
     except Exception as e:
-        print(f"❗ 오류 발생: {e}")
+        print(f"❗ 요청 중 오류 발생: {e}")
 
 if __name__ == "__main__":
     update_lotto_data()

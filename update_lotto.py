@@ -1,45 +1,33 @@
+import csv
 import json
 import requests
 from pathlib import Path
+import re
+from io import StringIO
 
+CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSd2GO5CSmSb7VgZCpGQBFLuHE-MI0b0agXPxSUXFZjo0S2H3CqfbmfIjz3vIpE4C7RJdhfq_MnSbA1/pub?output=csv"
 JSON_PATH = Path("2025lotto_numbers_1_to_1182_final.json")
 
 
-def get_latest_lotto_from_api():
-    url = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=0"
+def get_lotto_from_csv():
+    r = requests.get(CSV_URL, timeout=10)
+    r.raise_for_status()
 
-    r = requests.get(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://www.dhlottery.co.kr/"
-        },
-        timeout=10
-    )
+    csv_text = r.text
+    reader = csv.reader(StringIO(csv_text))
+    rows = list(reader)
 
-    text = r.text.strip()
-    print("API 응답 앞부분:", text[:100])
+    # A1 = "1208회"
+    round_text = rows[0][0]
+    round_no = int(re.search(r"\d+", round_text).group())
 
-    # ❌ JSON이 아닐 경우
-    if not text.startswith("{"):
-        raise Exception("API가 JSON을 반환하지 않음")
-
-    data = json.loads(text)
-
-    if data.get("returnValue") != "success":
-        raise Exception("동행복권 API returnValue 실패")
+    # A2~A8 = 번호
+    nums = [int(rows[i][0]) for i in range(1, 8)]
 
     return {
-        "round": int(data["drwNo"]),
-        "numbers": [
-            data["drwtNo1"],
-            data["drwtNo2"],
-            data["drwtNo3"],
-            data["drwtNo4"],
-            data["drwtNo5"],
-            data["drwtNo6"],
-        ],
-        "bonus": data["bnusNo"]
+        "round": round_no,
+        "numbers": nums[:6],
+        "bonus": nums[6]
     }
 
 
@@ -54,33 +42,26 @@ def get_saved_max_round():
     return max_round, data
 
 
-def save_lotto(data_list, new_lotto):
-    data_list = [d for d in data_list if d["round"] != new_lotto["round"]]
-    data_list.append(new_lotto)
+def save_lotto(data_list, lotto):
+    data_list = [d for d in data_list if d["round"] != lotto["round"]]
+    data_list.append(lotto)
     data_list.sort(key=lambda x: x["round"])
 
     with open(JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(data_list, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ {new_lotto['round']}회 저장 완료")
+    print(f"✅ {lotto['round']}회 JSON 업데이트 완료")
 
 
 def main():
+    lotto = get_lotto_from_csv()
     saved_round, data_list = get_saved_max_round()
-    print("저장된 최신 회차:", saved_round)
 
-    try:
-        latest = get_latest_lotto_from_api()
-    except Exception as e:
-        # ❗ API가 이상하면 Actions 실패시키지 않음
-        print("⚠️ API 오류:", e)
-        print("⏸ 업데이트 스킵")
-        return
+    print("CSV 회차:", lotto["round"])
+    print("저장된 회차:", saved_round)
 
-    print("API 최신 회차:", latest["round"])
-
-    if latest["round"] > saved_round:
-        save_lotto(data_list, latest)
+    if lotto["round"] > saved_round:
+        save_lotto(data_list, lotto)
     else:
         print("⏸ 이미 최신 상태")
 

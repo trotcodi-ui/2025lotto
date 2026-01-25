@@ -2,7 +2,7 @@ name: Lotto Auto Update
 
 on:
   schedule:
-    - cron: '0 12,13,14,15 * * 6'
+    - cron: '0 14 * * 6'   # 토요일 23:00 KST
   workflow_dispatch:
 
 permissions:

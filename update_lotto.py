@@ -2,12 +2,11 @@ import requests
 import json
 import os
 
-# 사용자님이 제공해주신 구글 시트 주소 (CSV 모드로 변환)
+# 1. 구글 시트 웹 게시(CSV) URL 확인 (반드시 '웹에 게시'가 되어 있어야 합니다)
 GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSd2GO5CSmSb7VgZCpGQBFLuHE-MI0b0agXPxSUXFZjo0S2H3CqfbmfIjz3vIpE4C7RJdhfq_MnSbA1/pub?output=csv"
 LOTTO_JSON_PATH = '2025lotto_numbers_1_to_1182_final.json'
 
 def update_lotto_data():
-    # 1. 기존 데이터 로드
     if os.path.exists(LOTTO_JSON_PATH):
         try:
             with open(LOTTO_JSON_PATH, 'r', encoding='utf-8') as f:
@@ -17,25 +16,35 @@ def update_lotto_data():
     else:
         lotto_data = []
 
-    last_draw = max([d['draw_no'] for d in lotto_data]) if lotto_data else 0
-    target_draw = last_draw + 1
-    print(f"🎯 구글 시트 우회 방식 가동 - 목표: {target_draw}회")
-
     try:
-        # 2. 구글 시트에서 데이터 읽기
         response = requests.get(GOOGLE_SHEET_CSV_URL, timeout=15)
         if response.status_code == 200:
-            # CSV 데이터 파싱 (구글 시트 수식 결과가 한 줄씩 들어옴)
+            # CSV 데이터 파싱 (한 줄씩 읽기)
             lines = response.text.strip().split('\n')
-            # 숫자만 추출 (수식 결과로 나온 값들)
-            extracted_numbers = [line.strip().replace('"', '') for line in lines if line.strip()]
+            raw_values = [line.strip().replace('"', '') for line in lines if line.strip()]
             
-            if len(extracted_numbers) >= 7:
+            # [수정 포인트] 숫자가 아닌 값(예: '1208회')을 걸러내고 숫자만 추출
+            extracted_numbers = []
+            current_draw_no = 0
+
+            for val in raw_values:
+                if '회' in val: # "1208회"에서 숫자만 추출
+                    current_draw_no = int(''.join(filter(str.isdigit, val)))
+                elif val.isdigit():
+                    extracted_numbers.append(int(val))
+
+            # 데이터가 충분한지 확인 (회차 정보와 번호 7개)
+            if current_draw_no > 0 and len(extracted_numbers) >= 7:
+                # 중복 확인: 이미 해당 회차가 있다면 건너뜀
+                if any(d['draw_no'] == current_draw_no for d in lotto_data):
+                    print(f"ℹ️ {current_draw_no}회 데이터가 이미 존재합니다.")
+                    return
+
                 new_entry = {
-                    "draw_no": target_draw,
-                    "date": "2026-01-24", # 구글 시트에서 날짜까지 가져오도록 확장 가능
-                    "numbers": [int(n) for n in extracted_numbers[:6]],
-                    "bonus": int(extracted_numbers[6])
+                    "draw_no": current_draw_no,
+                    "date": "2026-01-24", 
+                    "numbers": extracted_numbers[:6],
+                    "bonus": extracted_numbers[6]
                 }
 
                 lotto_data.append(new_entry)
@@ -43,11 +52,11 @@ def update_lotto_data():
 
                 with open(LOTTO_JSON_PATH, 'w', encoding='utf-8') as f:
                     json.dump(lotto_data, f, ensure_ascii=False, indent=4)
-                print(f"✅ {target_draw}회 업데이트 성공! (구글 시트 우회 완료)")
+                print(f"✅ {current_draw_no}회 업데이트 성공! JSON 저장 완료.")
             else:
-                print(f"❌ 구글 시트에서 번호를 충분히 찾지 못했습니다. (현재 개수: {len(extracted_numbers)})")
+                print(f"❌ 데이터를 충분히 찾지 못했습니다. (추출된 숫자: {len(extracted_numbers)}개)")
         else:
-            print(f"⚠️ 구글 시트 접근 실패 (상태 코드: {response.status_code})")
+            print(f"⚠️ 시트 접근 실패: {response.status_code}")
     except Exception as e:
         print(f"❗ 오류 발생: {e}")
 

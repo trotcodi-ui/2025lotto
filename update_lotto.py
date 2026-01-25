@@ -16,55 +16,51 @@ def get_lotto_from_csv():
     reader = csv.reader(StringIO(r.text))
     rows = list(reader)
 
-    round_text = rows[0][0]  # "1208회"
-    round_no = int(re.search(r"\d+", round_text).group())
+    # A1: "1208회"
+    round_text = rows[0][0]
+    draw_no = int(re.search(r"\d+", round_text).group())
 
-    nums = [int(rows[i][0]) for i in range(1, 8)]
+    nums = [int(rows[i][0]) for i in range(1, 7)]
+    bonus = int(rows[7][0])
 
-    return {
-        "회차": round_no,
-        "번호": nums[:6],
-        "보너스": nums[6]
-    }
+    return draw_no, nums, bonus
 
 
-def get_saved_max_round():
+def load_json():
     if not JSON_PATH.exists():
-        return 0, []
+        return []
 
     with open(JSON_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # ✅ 기존 JSON 구조 기준
-    max_round = max(item["회차"] for item in data)
-    return max_round, data
+        return json.load(f)
 
 
-def save_lotto(data_list, new_item):
-    # 중복 회차 제거
-    data_list = [d for d in data_list if d["회차"] != new_item["회차"]]
-    data_list.append(new_item)
-
-    # 회차 순 정렬
-    data_list.sort(key=lambda x: x["회차"])
-
+def save_json(data):
     with open(JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(data_list, f, ensure_ascii=False, indent=2)
-
-    print(f"✅ {new_item['회차']}회 JSON 업데이트 완료")
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def main():
-    new_item = get_lotto_from_csv()
-    saved_round, data_list = get_saved_max_round()
+    draw_no, nums, bonus = get_lotto_from_csv()
+    data = load_json()
 
-    print("CSV 회차:", new_item["회차"])
-    print("저장된 최신 회차:", saved_round)
+    saved_draws = {item["draw_no"] for item in data}
 
-    if new_item["회차"] > saved_round:
-        save_lotto(data_list, new_item)
-    else:
-        print("⏸ 이미 최신 상태")
+    print("CSV 회차:", draw_no)
+
+    if draw_no in saved_draws:
+        print("⏸ 이미 저장된 회차")
+        return
+
+    new_entry = {
+        "draw_no": draw_no,
+        "numbers": nums,
+        "bonus": bonus
+    }
+
+    data.insert(0, new_entry)  # 최신 회차를 맨 위에
+    save_json(data)
+
+    print(f"✅ {draw_no}회 JSON 업데이트 완료")
 
 
 if __name__ == "__main__":

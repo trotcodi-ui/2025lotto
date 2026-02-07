@@ -2,7 +2,12 @@ name: Lotto Auto Update
 
 on:
   schedule:
-    - cron: '0 14 * * 6'   # 토요일 23:00 KST
+    # 토요일 23:00 KST
+    - cron: '0 14 * * 6'
+    # 토요일 23:30 KST
+    - cron: '30 14 * * 6'
+    # 일요일 00:00 KST (UTC 기준 토요일 15:00)
+    - cron: '0 15 * * 6'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +26,6 @@ jobs:
           python-version: '3.11'
 
       - name: Dependencies Install
-        # 여기서 beautifulsoup4를 함께 설치해줘야 합니다!
         run: pip install requests beautifulsoup4
 
       - name: Run Update Script

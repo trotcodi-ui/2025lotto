@@ -32,6 +32,7 @@ jobs:
         run: python update_lotto.py
 
       - name: Commit and Push
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -39,6 +40,16 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "chore: update lotto numbers"
             git push
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No changes to commit"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # 실제로 새 커밋이 푸시됐을 때만 jsDelivr CDN 캐시를 강제로 비워서,
+      # lotto-iq(통계앱)/lotto-widget(위젯앱)이 다음 요청부터 바로 최신 회차를 받도록 함.
+      # 변경 없이 스킵된 실행에서는 불필요한 purge 호출을 하지 않음.
+      - name: Purge jsDelivr Cache
+        if: steps.commit.outputs.pushed == 'true'
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/trotcodi-ui/2025lotto@main/2025lotto_numbers_1_to_1182_final.json"
